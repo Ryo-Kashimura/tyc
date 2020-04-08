@@ -17,5 +17,6 @@ int main() {
             printf("%-11s %4i - %4i\n", name, birth, death);
         }
     }
+    fclose(f);
     return 0;
 }
