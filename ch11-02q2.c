@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include "ch11-02q2_mergesort.h"
 
 #define INITIAL_LENGTH 4
 #define INCREMENT_LENGTH 4
@@ -12,7 +13,31 @@ typedef struct {
     char name[];
 } EMP;
 
-int main() {
+bool areIncreasingOrderByBirth(EMP* x, EMP* y) {
+    if (x->birth < y->birth) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool areIncreasingOrderByDeath(EMP* x, EMP* y) {
+    if (x->death < y->death) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool areIncreasingOrderByName(EMP* x, EMP* y) {
+    if (strcmp(x->name, y->name) < 0) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+int main(int argc, char** argv) {
     FILE* f = fopen("./ch11-02q2.data", "r");
     if (!f) {
         fprintf(stderr, "%s\n", strerror(errno));
@@ -51,6 +76,19 @@ int main() {
         last++;
     }
     fclose(f);
+    bool (*areIncreasingOrder)(void*, void*);
+    if (argc > 1) {
+        if (atoi(argv[1]) == 1) {
+            areIncreasingOrder = areIncreasingOrderByBirth;
+        } else if (atoi(argv[1]) == 2) {
+            areIncreasingOrder = areIncreasingOrderByDeath;
+        } else {
+            areIncreasingOrder = areIncreasingOrderByName;
+        }
+    } else {
+        areIncreasingOrder = areIncreasingOrderByName;
+    }
+    myMergeSort(emps, arrayLength, areIncreasingOrder);
     for (size_t i = 0; i < (size_t)arrayLength; i++) {
         printf("%-11s %4i - %4i\n", emps[i]->name, emps[i]->birth, emps[i]->death);
     }
