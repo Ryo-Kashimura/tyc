@@ -9,8 +9,8 @@
 #define INCREMENT_LINE_COUNT 4
 #define INITIAL_LINE_LENGTH 32
 
-void append(TextLine* linePointer, Text* textPointer) {
-    if (textPointer->lineCount > textPointer->maxLineCount) {
+void insert(TextLine* linePointer, Text* textPointer, int lineNumber) {
+    if (textPointer->lineCount >= textPointer->maxLineCount) {
         int requiredLineCount = textPointer->maxLineCount + INCREMENT_LINE_COUNT;
         TextLine** newTextLinePointers = realloc(textPointer->textLinePointers, sizeof(TextLine*) * requiredLineCount);
         if (!newTextLinePointers) {
@@ -20,20 +20,15 @@ void append(TextLine* linePointer, Text* textPointer) {
         textPointer->textLinePointers = newTextLinePointers;
         textPointer->maxLineCount = requiredLineCount;
     }
-    textPointer->textLinePointers[textPointer->lineCount++] = linePointer;
-    textPointer->currentLineNumber++;
-    printf("lineCount        : %i\n", textPointer->lineCount);
-    printf("currentLineNumber: %i\n", textPointer->currentLineNumber);
-}
-
-void replaceAs(TextLine* linePointer, Text* textPointer) {
-    textPointer->textLinePointers[textPointer->currentLineNumber] = linePointer;
-    if (textPointer->currentLineNumber < textPointer->maxLineCount) {
-        textPointer->currentLineNumber++;
+    for (int i = textPointer->lineCount - 1; i >= lineNumber - 1; i--) {
+        textPointer->textLinePointers[i + 1] = textPointer->textLinePointers[i];
     }
+    textPointer->textLinePointers[lineNumber - 1] = linePointer;
+    textPointer->currentLineNumber = lineNumber;
+    textPointer->lineCount++;
 }
 
-TextLine readTextLineFrom(FILE* f) {
+TextLine* readTextLineFrom(FILE* f) {
     if (!f) {
         fputs(strerror(errno), stderr);
         exit(1);
@@ -43,50 +38,59 @@ TextLine readTextLineFrom(FILE* f) {
         fputs(strerror(errno), stderr);
         exit(1);
     }
-    printf("%p\n", &(linePointer->contentStringLength));
-    printf("%p\n", &(linePointer->maxContentStringLength));
-    printf("%p\n", &(linePointer->contentString));
-    //linePointer->contentString = "";
+    linePointer->contentString = malloc(sizeof(char) * INITIAL_LINE_LENGTH);
+    if (!linePointer->contentString) {
+        fputs(strerror(errno), stderr);
+        exit(1);
+    }
+    linePointer->contentString[0] = '\0';
     linePointer->contentStringLength = 0;
     linePointer->maxContentStringLength = INITIAL_LINE_LENGTH;
     char buffer[BUFFER_LENGTH];
     buffer[0] = '\0';
     for(;;) {
         if (!fgets(buffer, BUFFER_LENGTH, f)) {
-            printf("no character found.\n");
             break;
         }
-        int requiredLineLength = (linePointer->contentString)? strlen(linePointer->contentString) + strlen(buffer) + 1 : strlen(buffer) + 1;
-        printf("requiredLineLength: %i\n", requiredLineLength);
+        if (!strncmp(buffer, ".\n", 2)) {
+            break;
+        }
+        int requiredLineLength = linePointer->contentStringLength + strlen(buffer);
         if (linePointer->maxContentStringLength < requiredLineLength) {
-            printf("start reallocation.\n");
             TextLine* newLinePointer = realloc(linePointer, sizeof(TextLine) + sizeof(char) * requiredLineLength);
-            //char* newContentString = realloc(linePointer->contentString, sizeof(char) * requiredLineLength);
-            printf("finished reallocation.\n");
+            newLinePointer->contentString = realloc(linePointer->contentString, sizeof(char) * requiredLineLength);
             if (!newLinePointer) {
                 fputs(strerror(errno), stderr);
                 exit(1);
             }
-            printf("reallocated contentString memory.\n");
+            if (!newLinePointer->contentString) {
+                fputs(strerror(errno), stderr);
+                exit(1);
+            }
             linePointer = newLinePointer;
-            //linePointer->contentString = newContentString;
             linePointer->maxContentStringLength = requiredLineLength;
         }
-        printf("reallocation skipped.\n");
-        printf("buffer: %s\n", buffer);
-        if (!linePointer->contentString) {
-            printf("contentString is NULL.\n");
-            strcpy(linePointer->contentString, buffer);
-        } else {
-            strcat(linePointer->contentString, buffer);
-            printf("contentString: %s\n", linePointer->contentString);
+        if (linePointer->contentString) {
+            if (linePointer->contentStringLength > 1) {
+                if (buffer[strlen(buffer) - 1] == '\n') {
+                    strncat(linePointer->contentString, buffer, strlen(buffer) - 1);
+                } else {
+                    strcat(linePointer->contentString, buffer);
+                }
+            } else {
+                if (buffer[strlen(buffer) - 1] == '\n') {
+                    strncpy(linePointer->contentString, buffer, strlen(buffer) - 1);
+                } else {
+                    strcpy(linePointer->contentString, buffer);
+                }
+            }
+            linePointer->contentStringLength = strlen(linePointer->contentString);
         }
-        linePointer->contentStringLength = strlen(linePointer->contentString);
         if (buffer[strlen(buffer) - 1] == '\n') {
             break;
         }
     }
-    return *linePointer;
+    return linePointer;
 }
 
 Text readTextFrom(FILE* f) {
@@ -94,67 +98,67 @@ Text readTextFrom(FILE* f) {
         fputs(strerror(errno), stderr);
         exit(1);
     }
-    Text text = {.currentLineNumber = 1, .lineCount = 1, .maxLineCount = INITIAL_LINE_COUNT};
+    Text text = {.currentLineNumber = 0, .lineCount = 0, .maxLineCount = INITIAL_LINE_COUNT};
     text.textLinePointers = malloc(sizeof(TextLine*) * text.maxLineCount);
     if (!text.textLinePointers) {
         fputs(strerror(errno), stderr);
         exit(1);
     }
     for (;;) {
-        TextLine _line = readTextLineFrom(f);
-        if (!_line.contentStringLength) {
+        TextLine* linePointer = readTextLineFrom(f);
+        if (linePointer->contentStringLength < 2) {
             break;
         }
-        TextLine* linePointer = malloc(sizeof _line);
-        if (!linePointer) {
-            fputs(strerror(errno), stderr);
-            exit(1);
-        }
-        *linePointer = _line;
-        append(linePointer, &text);
+        insert(linePointer, &text, text.lineCount + 1);
     }
     return text;
 }
 
 void show(Text text) {
     for (int i = -2; i < 3; i++) {
-        if ((text.currentLineNumber + i < 1) || (text.maxLineCount < text.currentLineNumber + i)) {
+        if ((text.currentLineNumber + i < 1) || (text.lineCount < text.currentLineNumber + i)) {
             continue;
         }
-        printf("%i %s\n", text.currentLineNumber + i, text.textLinePointers[text.currentLineNumber + i]->contentString);
+        if (i == 0) {
+            printf("%i*%s\n", text.currentLineNumber + i, text.textLinePointers[text.currentLineNumber + i - 1]->contentString);
+        } else {
+            printf("%i %s\n", text.currentLineNumber + i, text.textLinePointers[text.currentLineNumber + i - 1]->contentString);
+        }
     }
 }
 
 void appendTo(Text* textPointer) {
-    char command[32];
     for (;;) {
-        if (!fgets(command, 31, stdin)) {
+        TextLine* linePointer = readTextLineFrom(stdin);
+        if (linePointer->contentStringLength < 1) {
+            fputs("returned from append mode.\n", stdout);
             break;
         }
-        if (command[0] == '.') {
-            break;
-        }
-        TextLine _line = readTextLineFrom(stdin);
-        TextLine* linePointer = malloc(sizeof _line);
-        *linePointer = _line;
-        append(linePointer, textPointer);
+        insert(linePointer, textPointer, textPointer->lineCount + 1);
     }
 }
 
 void replace(Text* textPointer) {
-    char command[32];
+    int currentLineNumber = textPointer->currentLineNumber;
+    deleteCurrentLineOf(textPointer);
     for (;;) {
-        if (!fgets(command, 31, stdin)) {
+        TextLine* linePointer = readTextLineFrom(stdin);
+        if (linePointer->contentStringLength < 1) {
+            fputs("returned from append mode.\n", stdout);
             break;
         }
-        if (!strcmp(command, ".")) {
-            break;
-        }
-        TextLine _line = readTextLineFrom(stdin);
-        TextLine* linePointer = malloc(sizeof _line);
-        *linePointer = _line;
-        replaceAs(linePointer, textPointer);
+        insert(linePointer, textPointer, textPointer->currentLineNumber);
+        textPointer->currentLineNumber++;
     }
+    textPointer->currentLineNumber = currentLineNumber;
+}
+
+void deleteCurrentLineOf(Text* textPointer) {
+    for (int i = textPointer->currentLineNumber - 1; i + 1 < textPointer->lineCount; i++) {
+        textPointer->textLinePointers[i] = textPointer->textLinePointers[i + 1];
+    }
+    textPointer->textLinePointers[textPointer->lineCount] = NULL;
+    textPointer->lineCount--;
 }
 
 void write(Text text, FILE* f) {
@@ -164,5 +168,6 @@ void write(Text text, FILE* f) {
     }
     for (int i = 0; i < text.lineCount; i++) {
         fputs(text.textLinePointers[i]->contentString, f);
+        fputs("\n", f);
     }
 }

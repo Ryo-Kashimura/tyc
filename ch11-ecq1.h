@@ -13,12 +13,14 @@ typedef struct {
     TextLine** textLinePointers;
 } Text;
 
-void show(Text t);
-
 Text readTextFrom(FILE* f);
+
+void show(Text t);
 
 void appendTo(Text* textPointer);
 
 void replace(Text* textPointer);
+
+void deleteCurrentLineOf(Text* textPointer);
 
 void write(Text t, FILE* f);

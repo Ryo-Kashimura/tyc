@@ -9,43 +9,55 @@ int main(int argc, char** argv) {
     if (argc > 1) {
         outputFile = fopen(argv[1], "a");
     } else {
-        outputFile = fopen("./ch11-ecq1_output.txt", "w");
+        outputFile = fopen("./ch11-ecq1_output.txt", "r");
+        if (!outputFile) {
+            outputFile = fopen("./ch11-ecq1_output.txt", "w");
+        }
     }
-    if (!outputFile) {
+    Text text = readTextFrom(outputFile);
+    if (fclose(outputFile)) {
         fputs(strerror(errno), stderr);
         exit(1);
     }
-    Text text = readTextFrom(outputFile);
     char command[64];
     for (;;) {
         if (!fgets(command, 63, stdin)) {
             break;
         }
-        if (command[0] == 'a') {
-            appendTo(&text);
-        } else if (command[0] == 'r') {
-            replace(&text);
-        } else if (command[0] == 'l') {
+        if (!strcmp(command, "l\n")) {
             show(text);
-        } else if (command[0] == 'q') {
-            break;
+        } else if (!strcmp(command, "a\n")) {
+            appendTo(&text);
+        } else if (!strcmp(command, "r\n")) {
+            replace(&text);
+        } else if (!strcmp(command, "d\n")) {
+            deleteCurrentLineOf(&text);
         } else if (command[0] == 'w') {
+            outputFile = fopen("./ch11-ecq1_output.txt", "r+");
             char filepath[64];
-            int ret = sscanf(command, "w %s", filepath);
-            FILE* _outputFile = outputFile;
-            if (ret == 1) {
-                _outputFile = fopen(filepath, "w");
+            if (sscanf(command, "w %s", filepath) == 1) {
+                outputFile = fopen(filepath, "w");
             }
-            write(text, _outputFile);
+            if (!outputFile) {
+                outputFile = fopen("./ch11-ecq1_output.txt", "w");
+            }
+            write(text, outputFile);
+            if (fclose(outputFile)) {
+                fputs(strerror(errno), stderr);
+                exit(1);
+            }
+        } else if (!strcmp(command, "q\n")) {
+            break;
         } else if (atoi(command) != 0) {
-            text.currentLineNumber = atoi(command);
+            int destLineNumber = atoi(command);
+            if (0 < destLineNumber && destLineNumber <= text.lineCount) {
+                text.currentLineNumber = atoi(command);
+            } else {
+                fprintf(stderr, "cannot move to line %i.\n", destLineNumber);
+            }
         } else {
-            fputs("invalid command.\n", stdout);
+            fputs("invalid command.\n", stderr);
         }
-    }
-    if (fclose(outputFile)) {
-        fputs(strerror(errno), stderr);
-        exit(1);
     }
     return 0;
 }
